@@ -39,13 +39,7 @@ import           System.Mem.StableName
 import           Text.HTML.TagSoup (Tag(..))
 import           Text.HTML.TagSoup.Tree (parseTree, TagTree(..))
 
-#ifdef ghcjs_HOST_OS
 import           Language.Javascript.JSaddle hiding (obj, val)
-import           GHCJS.Foreign.Callback hiding (asyncCallback)
-import qualified JavaScript.Object.Internal as OI
-#else
-import           Language.Javascript.JSaddle hiding (Success, obj, val)
-#endif
 
 
 #ifndef ghcjs_HOST_OS
@@ -53,10 +47,7 @@ import           Language.Javascript.JSaddle (eval, waitForAnimationFrame)
 import           Data.FileEmbed
 #endif
 
-import           Miso.Delegate (delegator)
-#ifdef ghcjs_HOST_OS
-import           Miso.Delegate (undelegator)
-#endif
+import           Miso.Delegate (delegator, undelegator)
 import           Miso.Concurrent
 import           Miso.Diff
 import           Miso.Effect
@@ -181,14 +172,12 @@ notify m app action = Effect m [ \_ -> io ]
       forM_ (M.lookup (mountPoint app) dispatch) $ \(_, _, f) ->
         f action
 
-#ifdef ghcjs_HOST_OS
 -- | Internally used for runView and startApp
 initApp :: App model action -> Sink action -> JSM (IORef VTree)
 initApp App {..} snk = do
   vtree <- runView (view model) snk
   diff mountPoint Nothing (Just vtree)
   liftIO (newIORef vtree)
-#endif
 
 runView :: View action -> Sink action -> JSM VTree
 runView (ComponentNode (Component maybeKey app) mountHooks) snk = do
@@ -197,31 +186,28 @@ runView (ComponentNode (Component maybeKey app) mountHooks) snk = do
 
   -- mounting causes a recursive diff to occur, creating subcomponents
   -- and setting up infrastructure for each sub-component
-#ifdef ghcjs_HOST_OS
   mountCb <-
-    syncCallback' $ do
-      forM_ mountHooks $ \(Mount m _) -> snk m
+    function $ \_ _ [continuation] -> do
+      forM_ mountHooks $ \(Mount m _) -> liftIO $ snk m
       vtreeRef <- common app (initApp app)
-      VTree (OI.Object jval) <- liftIO (readIORef vtreeRef)
-      pure jval
+      VTree vtree <- liftIO (readIORef vtreeRef)
+      void $ call continuation global [vtree]
 
   -- unmounting kills the thread and state
   -- associated with it (queue, lock, model closure)
   unmountCb <-
-    syncCallback' $ do
-      forM_ mountHooks $ \(Mount _ u) -> snk u
-      releaseCallback mountCb
+    function $ \_ _ _ -> do
+      forM_ mountHooks $ \(Mount _ u) -> liftIO $ snk u
+      freeFunction mountCb
       M.lookup name <$> liftIO (readIORef componentMap) >>= \case
         Nothing ->
-          pure jsNull
+          pure ()
         Just (tid, ref, _) -> do
           mount <- mountElement (mountPoint app)
           undelegator mount ref (events app)
           liftIO $ do
             killThread tid
             modifyIORef' componentMap (M.delete name)
-            pure jsNull
-#endif
   set "type" ("vcomp" :: JSString) vcomp
   set "tag" ("div" :: JSString) vcomp
   forM_ maybeKey $ \(Key key) -> set "key" key vcomp
@@ -231,10 +217,8 @@ runView (ComponentNode (Component maybeKey app) mountHooks) snk = do
   set "events" eventsObj vcomp
   set "id" name vcomp
   flip (set "children") vcomp =<< toJSVal ([] :: [MisoString])
-#ifdef ghcjs_HOST_OS
-  set "mount" (jsval mountCb) vcomp
-  set "unmount" (jsval unmountCb) vcomp
-#endif
+  set "mount" mountCb vcomp
+  set "unmount" unmountCb vcomp
   pure (VTree vcomp)
 
 
