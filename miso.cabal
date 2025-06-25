@@ -167,6 +167,9 @@ library
       jsbits/delegate.js
       jsbits/isomorphic.js
       jsbits/util.js
+  if arch(wasm32)
+    build-depends:
+      jsaddle-wasm >=0.1.2
 
 source-repository head
    type: git

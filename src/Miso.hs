@@ -75,6 +75,9 @@ import           Miso.TypeLevel
 import           Miso.Types
 import           Miso.Util
 import           Miso.WebSocket
+#ifdef wasm32_HOST_ARCH
+import qualified Language.Javascript.JSaddle.Wasm.TH as JSaddle.Wasm.TH
+#endif
 
 -- | Helper function to abstract out common functionality between `startApp` and `miso`
 common
@@ -88,10 +91,17 @@ common App {..} m getView = do
 #ifdef IOS
   mapM_ eval [delegateJs,diffJs,isomorphicJs,utilJs]
 #else
+#ifdef wasm32_HOST_ARCH
+  $(JSaddle.Wasm.TH.evalFile "jsbits/delegate.js")
+  $(JSaddle.Wasm.TH.evalFile "jsbits/diff.js")
+  $(JSaddle.Wasm.TH.evalFile "jsbits/isomorphic.js")
+  $(JSaddle.Wasm.TH.evalFile "jsbits/util.js")
+#else
   _ <- eval ($(embedStringFile "jsbits/delegate.js") :: JSString)
   _ <- eval ($(embedStringFile "jsbits/diff.js") :: JSString)
   _ <- eval ($(embedStringFile "jsbits/isomorphic.js") :: JSString)
   _ <- eval ($(embedStringFile "jsbits/util.js") :: JSString)
+#endif
 #endif
 #endif
   -- init Notifier
