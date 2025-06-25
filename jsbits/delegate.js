@@ -1,4 +1,3 @@
-window = typeof window === 'undefined' ? {} : window;
 window['oldCallbacks'] = [];
 window['currentCallbacks'] = [];
 

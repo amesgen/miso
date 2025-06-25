@@ -1,4 +1,3 @@
-window = typeof window === 'undefined' ? {} : window;
 window['collapseSiblingTextNodes'] = function collapseSiblingTextNodes(vs) {
   if (!vs) { return []; }
   var ax = 0, adjusted = vs.length > 0 ? [vs[0]] : [];

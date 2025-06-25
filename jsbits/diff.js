@@ -1,5 +1,4 @@
 /* virtual-dom diffing algorithm, applies patches as detected */
-window = typeof window === 'undefined' ? {} : window;
 window['diff'] = function diff(currentObj, newObj, parent, doc) {
   if (!currentObj && !newObj) return;
   else if (!currentObj && newObj) window['createNode'](newObj, parent, doc);
